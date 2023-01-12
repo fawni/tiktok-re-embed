@@ -13,7 +13,8 @@ pub struct TikTok {
 impl TikTok {
     pub fn valid_urls() -> [Regex; 2] {
         [
-            Regex::new(r"https?://www\.tiktok\.com/(?:embed|@[\w\.-]+/video)/(\d+)").unwrap(),
+            Regex::new(r"https?://(?:www\.|m\.)?tiktok\.com/(?:embed|@[\w\.-]+/video|v)/(\d+)")
+                .unwrap(),
             Regex::new(r"https?://(?:vm|vt)\.tiktok\.com/(\w+)").unwrap(),
         ]
     }
@@ -66,13 +67,14 @@ struct PlayAddr {
 }
 
 pub async fn get_tiktok(id: &str) -> anyhow::Result<TikTok> {
-    let api_url = format!("https://api2.musical.ly/aweme/v1/feed/?aweme_id={}
-    &version_code=262&app_name=musical_ly&channel=App&device_id=null&os_version=14.4.2&device_platform=iphone&device_type=iPhone9&region=US&carrier_region=US", id);
+    let api_url = format!("https://api2.musical.ly/aweme/v1/feed/?aweme_id={}", id);
     let res = reqwest::get(api_url).await?.json::<ApiResponse>().await?;
     let mut aweme = res.aweme_list[0].clone();
+
     if aweme.id != id {
         bail!("TikTok not found!")
     }
+
     aweme.author.avatar_url = format!(
         "https://p16-amd-va.tiktokcdn.com/origin/{}.jpeg",
         aweme.author.avatar_uri

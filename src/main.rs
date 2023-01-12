@@ -19,7 +19,6 @@ async fn main() -> anyhow::Result<()> {
     )
     .event_handler(Handler)
     .await?;
-
     client.start().await?;
 
     Ok(())
@@ -31,12 +30,7 @@ struct Handler;
 impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
         let bot = ready.user;
-        success!(
-            "Ready! logged in as {}#{}({})",
-            bot.name,
-            bot.discriminator,
-            bot.id
-        );
+        success!("Ready! logged in as {}({})", bot.tag(), bot.id);
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
@@ -46,10 +40,9 @@ impl EventHandler for Handler {
     }
 }
 
-async fn handle_message(ctx: Context, mut msg: Message) -> anyhow::Result<()> {
-    let regexes = tiktok::TikTok::valid_urls();
-    let (re, mobile_re) = (&regexes[0], &regexes[1]);
-    if !re.is_match(&msg.content) && !mobile_re.is_match(&msg.content) {
+async fn handle_message(ctx: Context, mut message: Message) -> anyhow::Result<()> {
+    let re = tiktok::TikTok::valid_urls();
+    if !re[0].is_match(&message.content) && !re[1].is_match(&message.content) {
         return Ok(());
     };
 
@@ -57,37 +50,39 @@ async fn handle_message(ctx: Context, mut msg: Message) -> anyhow::Result<()> {
         .redirect(redirect::Policy::custom(|attempt| attempt.stop()))
         .build()?;
 
-    let mut content = msg.content.clone();
-    if mobile_re.is_match(&content) {
-        let mt = mobile_re.captures(&msg.content).unwrap().get(0).unwrap();
-        let res = client.get(mt.as_str()).send().await?;
-        let x = &res.text().await?;
-        content = x.clone();
+    let mut content = message.content.clone();
+    if re[1].is_match(&content) {
+        let url = re[1].captures(&content).unwrap().get(0).unwrap();
+        let res = client.get(url.as_str()).send().await?;
+        content = res.headers()["location"].to_str().unwrap().to_string();
     }
-    let aweme_id = re.captures(&content).unwrap().get(1).unwrap().as_str();
+    let aweme_id = re[0].captures(&content).unwrap().get(1).unwrap().as_str();
     info!(
         "Re-embedding TikTok with aweme id {} | {}({})",
         aweme_id,
-        msg.author.tag(),
-        msg.author.id
+        message.author.tag(),
+        message.author.id
     );
+
     let tiktok = match tiktok::get_tiktok(aweme_id).await {
         Ok(v) => v,
         Err(_) => {
-            msg.react(ctx.http(), ReactionType::Unicode(String::from("❌")))
+            message
+                .react(ctx.http(), ReactionType::Unicode(String::from("❌")))
                 .await?;
             bail!("Failed to get TikTok!")
         }
     };
     let file = reqwest::get(tiktok.video_url).await?.bytes().await?;
 
-    let typing = Typing::start(ctx.http.clone(), msg.channel_id.0)?;
-    msg.suppress_embeds(ctx.http()).await?;
-    msg.channel_id
-        .send_message(ctx.http(), |r| {
-            r.add_file(AttachmentType::Bytes {
+    let typing = Typing::start(ctx.http.clone(), message.channel_id.0)?;
+    message.suppress_embeds(ctx.http()).await?;
+    message
+        .channel_id
+        .send_message(ctx.http(), |m| {
+            m.add_file(AttachmentType::Bytes {
                 data: file.as_ref().into(),
-                filename: String::from("tiktok.mp4"),
+                filename: format!("{aweme_id}.mp4"),
             })
             .embed(|e| {
                 e.author(|a| {
@@ -104,7 +99,7 @@ async fn handle_message(ctx: Context, mut msg: Message) -> anyhow::Result<()> {
                 .field("Views", tiktok.statistics.views, true)
                 .color(0xF82054)
             })
-            .reference_message(&msg)
+            .reference_message(&message)
             .allowed_mentions(|am| am.empty_parse())
         })
         .await?;
