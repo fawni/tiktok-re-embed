@@ -36,7 +36,7 @@ impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
         handle_message(ctx, msg)
             .await
-            .unwrap_or_else(|err| error!("{}", err))
+            .unwrap_or_else(|err| error!("{err}"))
     }
 }
 
@@ -52,11 +52,11 @@ async fn handle_message(ctx: Context, mut message: Message) -> anyhow::Result<()
 
     let mut content = message.content.clone();
     if re[1].is_match(&content) {
-        let url = re[1].captures(&content).unwrap().get(0).unwrap();
-        let res = client.get(url.as_str()).send().await?;
-        content = res.headers()["location"].to_str().unwrap().to_string();
+        let url = &re[1].captures(&content).unwrap()[0];
+        let res = client.get(url).send().await?;
+        content = res.headers()["location"].to_str()?.to_string();
     }
-    let aweme_id = re[0].captures(&content).unwrap().get(1).unwrap().as_str();
+    let aweme_id = &re[0].captures(&content).unwrap()[1];
     info!(
         "Re-embedding TikTok with aweme id {} | {}({})",
         aweme_id,
@@ -64,16 +64,14 @@ async fn handle_message(ctx: Context, mut message: Message) -> anyhow::Result<()
         message.author.id
     );
 
-    let tiktok = match tiktok::get_tiktok(aweme_id).await {
-        Ok(v) => v,
-        Err(_) => {
+    let Ok(tiktok) = tiktok::get_tiktok(aweme_id).await else {
             message
                 .react(ctx.http(), ReactionType::Unicode(String::from("❌")))
                 .await?;
             bail!("Failed to get TikTok!")
-        }
     };
-    let file = reqwest::get(tiktok.video_url).await?.bytes().await?;
+
+    let file = client.get(tiktok.video_url).send().await?.bytes().await?;
 
     let typing = Typing::start(ctx.http.clone(), message.channel_id.0)?;
     message.suppress_embeds(ctx.http()).await?;
