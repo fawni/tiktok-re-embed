@@ -11,6 +11,23 @@ pub struct TikTok {
 }
 
 impl TikTok {
+    pub async fn from(id: &str) -> anyhow::Result<TikTok> {
+        let api_url = format!("https://api2.musical.ly/aweme/v1/feed/?aweme_id={}", id);
+        let res = reqwest::get(api_url).await?.json::<ApiResponse>().await?;
+        let aweme = res.aweme_list[0].clone();
+
+        if aweme.id != id {
+            bail!("TikTok not found!")
+        }
+
+        Ok(TikTok {
+            video_url: aweme.video.play_addr.url_list[0].to_owned(),
+            description: aweme.desc,
+            author: aweme.author,
+            statistics: aweme.statistics,
+        })
+    }
+
     pub fn valid_urls() -> [Regex; 2] {
         [
             Regex::new(r"https?://(?:www\.|m\.)?tiktok\.com/(?:embed|@[\w\.-]+/video|v)/(\d+)")
@@ -71,21 +88,4 @@ struct ApiVideo {
 #[derive(Deserialize, Debug, Clone)]
 struct PlayAddr {
     url_list: Vec<String>,
-}
-
-pub async fn get_tiktok(id: &str) -> anyhow::Result<TikTok> {
-    let api_url = format!("https://api2.musical.ly/aweme/v1/feed/?aweme_id={}", id);
-    let res = reqwest::get(api_url).await?.json::<ApiResponse>().await?;
-    let aweme = res.aweme_list[0].clone();
-
-    if aweme.id != id {
-        bail!("TikTok not found!")
-    }
-
-    Ok(TikTok {
-        video_url: aweme.video.play_addr.url_list[0].to_owned(),
-        description: aweme.desc,
-        author: aweme.author,
-        statistics: aweme.statistics,
-    })
 }

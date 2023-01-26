@@ -8,7 +8,7 @@ use serenity::{
     prelude::*,
 };
 
-mod tiktok;
+use tiktok_re_embed::tiktok::TikTok;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -41,7 +41,7 @@ impl EventHandler for Handler {
 }
 
 async fn handle_message(ctx: Context, mut message: Message) -> anyhow::Result<()> {
-    let re = tiktok::TikTok::valid_urls();
+    let re = TikTok::valid_urls();
     if !re[0].is_match(&message.content) && !re[1].is_match(&message.content) {
         return Ok(());
     };
@@ -64,7 +64,7 @@ async fn handle_message(ctx: Context, mut message: Message) -> anyhow::Result<()
         message.author.id
     );
 
-    let Ok(tiktok) = tiktok::get_tiktok(aweme_id).await else {
+    let Ok(tiktok) = TikTok::from(aweme_id).await else {
         message
             .react(ctx.http(), ReactionType::Unicode(String::from("❌")))
             .await?;
