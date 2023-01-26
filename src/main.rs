@@ -54,7 +54,7 @@ async fn handle_message(ctx: Context, mut message: Message) -> anyhow::Result<()
     if re[1].is_match(&content) {
         let url = &re[1].captures(&content).unwrap()[0];
         let res = client.get(url).send().await?;
-        content = res.headers()["location"].to_str()?.to_string();
+        content = res.headers()["location"].to_str()?.to_owned();
     }
     let aweme_id = &re[0].captures(&content).unwrap()[1];
     info!(
@@ -65,10 +65,10 @@ async fn handle_message(ctx: Context, mut message: Message) -> anyhow::Result<()
     );
 
     let Ok(tiktok) = tiktok::get_tiktok(aweme_id).await else {
-            message
-                .react(ctx.http(), ReactionType::Unicode(String::from("❌")))
-                .await?;
-            bail!("Failed to get TikTok!")
+        message
+            .react(ctx.http(), ReactionType::Unicode(String::from("❌")))
+            .await?;
+        bail!("Failed to get TikTok!")
     };
 
     let file = client.get(tiktok.video_url).send().await?.bytes().await?;
@@ -89,7 +89,7 @@ async fn handle_message(ctx: Context, mut message: Message) -> anyhow::Result<()
                         tiktok.author.name, tiktok.author.username
                     ))
                     .url(format!("https://tiktok.com/@{}", tiktok.author.username))
-                    .icon_url(tiktok.author.avatar_url)
+                    .icon_url(tiktok.author.avatar_url())
                 })
                 .description(tiktok.description)
                 .field("Likes", tiktok.statistics.likes, true)
@@ -101,7 +101,7 @@ async fn handle_message(ctx: Context, mut message: Message) -> anyhow::Result<()
             .allowed_mentions(|am| am.empty_parse())
         })
         .await?;
-    typing.stop().unwrap();
+    _ = typing.stop();
 
     Ok(())
 }

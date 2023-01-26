@@ -27,8 +27,15 @@ pub struct VideoAuthor {
     #[serde(rename = "unique_id")]
     pub username: String,
     pub avatar_uri: String,
-    #[serde(skip)]
-    pub avatar_url: String,
+}
+
+impl VideoAuthor {
+    pub fn avatar_url(&self) -> String {
+        format!(
+            "https://p16-amd-va.tiktokcdn.com/origin/{}.jpeg",
+            &self.avatar_uri
+        )
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -69,19 +76,14 @@ struct PlayAddr {
 pub async fn get_tiktok(id: &str) -> anyhow::Result<TikTok> {
     let api_url = format!("https://api2.musical.ly/aweme/v1/feed/?aweme_id={}", id);
     let res = reqwest::get(api_url).await?.json::<ApiResponse>().await?;
-    let mut aweme = res.aweme_list[0].clone();
+    let aweme = res.aweme_list[0].clone();
 
     if aweme.id != id {
         bail!("TikTok not found!")
     }
 
-    aweme.author.avatar_url = format!(
-        "https://p16-amd-va.tiktokcdn.com/origin/{}.jpeg",
-        aweme.author.avatar_uri
-    );
-
     Ok(TikTok {
-        video_url: aweme.video.play_addr.url_list[0].to_string(),
+        video_url: aweme.video.play_addr.url_list[0].to_owned(),
         description: aweme.desc,
         author: aweme.author,
         statistics: aweme.statistics,
