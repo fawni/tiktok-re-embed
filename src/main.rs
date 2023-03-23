@@ -1,4 +1,4 @@
-use anyhow::bail;
+use miette::{miette, IntoDiagnostic, WrapErr};
 use paris::{error, info, success};
 use reqwest::redirect;
 use serenity::{
@@ -11,15 +11,18 @@ use serenity::{
 use tiktok_re_embed::tiktok::TikTok;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    kankyo::init()?;
+async fn main() -> miette::Result<()> {
+    kankyo::init().into_diagnostic().wrap_err("dotenv")?;
     let mut client = Client::builder(
-        std::env::var("DISCORD_TOKEN")?,
+        std::env::var("DISCORD_TOKEN")
+            .into_diagnostic()
+            .wrap_err("DISCORD_TOKEN")?,
         GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT,
     )
     .event_handler(Handler)
-    .await?;
-    client.start().await?;
+    .await
+    .into_diagnostic()?;
+    client.start().await.into_diagnostic()?;
 
     Ok(())
 }
@@ -40,7 +43,7 @@ impl EventHandler for Handler {
     }
 }
 
-async fn handle_message(ctx: Context, mut message: Message) -> anyhow::Result<()> {
+async fn handle_message(ctx: Context, mut message: Message) -> miette::Result<()> {
     let re = TikTok::valid_urls();
     if !re[0].is_match(&message.content) && !re[1].is_match(&message.content) {
         return Ok(());
@@ -48,13 +51,17 @@ async fn handle_message(ctx: Context, mut message: Message) -> anyhow::Result<()
 
     let client = reqwest::Client::builder()
         .redirect(redirect::Policy::custom(|attempt| attempt.stop()))
-        .build()?;
+        .build()
+        .into_diagnostic()?;
 
     let mut content = message.content.clone();
     if re[1].is_match(&content) {
         let url = &re[1].captures(&content).unwrap()[0];
-        let res = client.get(url).send().await?;
-        content = res.headers()["location"].to_str()?.to_owned();
+        let res = client.get(url).send().await.into_diagnostic()?;
+        content = res.headers()["location"]
+            .to_str()
+            .into_diagnostic()?
+            .to_owned();
     }
     let aweme_id = &re[0].captures(&content).unwrap()[1];
     info!(
@@ -67,14 +74,25 @@ async fn handle_message(ctx: Context, mut message: Message) -> anyhow::Result<()
     let Ok(tiktok) = TikTok::from(aweme_id).await else {
         message
             .react(ctx.http(), ReactionType::Unicode(String::from("❌")))
-            .await?;
-        bail!("Failed to get TikTok!")
+            .await.into_diagnostic()?;
+
+        return Err(miette!("Invalid TikTok ID"));
     };
 
-    let file = client.get(tiktok.video_url).send().await?.bytes().await?;
+    let file = client
+        .get(tiktok.video_url)
+        .send()
+        .await
+        .into_diagnostic()?
+        .bytes()
+        .await
+        .into_diagnostic()?;
 
-    let typing = Typing::start(ctx.http.clone(), message.channel_id.0)?;
-    message.suppress_embeds(ctx.http()).await?;
+    let typing = Typing::start(ctx.http.clone(), message.channel_id.0).into_diagnostic()?;
+    message
+        .suppress_embeds(ctx.http())
+        .await
+        .into_diagnostic()?;
     message
         .channel_id
         .send_message(ctx.http(), |m| {
@@ -100,7 +118,8 @@ async fn handle_message(ctx: Context, mut message: Message) -> anyhow::Result<()
             .reference_message(&message)
             .allowed_mentions(|am| am.empty_parse())
         })
-        .await?;
+        .await
+        .into_diagnostic()?;
     _ = typing.stop();
 
     Ok(())

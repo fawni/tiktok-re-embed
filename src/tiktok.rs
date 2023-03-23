@@ -1,4 +1,4 @@
-use anyhow::bail;
+use miette::{miette, IntoDiagnostic};
 use regex::Regex;
 use serde::Deserialize;
 
@@ -11,13 +11,18 @@ pub struct TikTok {
 }
 
 impl TikTok {
-    pub async fn from(id: &str) -> anyhow::Result<TikTok> {
+    pub async fn from(id: &str) -> miette::Result<TikTok> {
         let api_url = format!("https://api2.musical.ly/aweme/v1/feed/?aweme_id={}", id);
-        let res = reqwest::get(api_url).await?.json::<ApiResponse>().await?;
+        let res = reqwest::get(api_url)
+            .await
+            .into_diagnostic()?
+            .json::<ApiResponse>()
+            .await
+            .into_diagnostic()?;
         let aweme = res.aweme_list[0].clone();
 
         if aweme.id != id {
-            bail!("TikTok not found!")
+            return Err(miette!("TikTok not found!"));
         }
 
         Ok(TikTok {
@@ -29,10 +34,13 @@ impl TikTok {
     }
 
     pub fn valid_urls() -> [Regex; 2] {
+        const DESKTOP_REGEX: &str =
+            r"https?://(?:www\.|m\.)?tiktok\.com/(?:embed|@[\w\.-]+/video|v)/(\d+)";
+        const MOBILE_REGEX: &str = r"https?://(?:vm|vt)\.tiktok\.com/(\w+)";
+
         [
-            Regex::new(r"https?://(?:www\.|m\.)?tiktok\.com/(?:embed|@[\w\.-]+/video|v)/(\d+)")
-                .unwrap(),
-            Regex::new(r"https?://(?:vm|vt)\.tiktok\.com/(\w+)").unwrap(),
+            Regex::new(DESKTOP_REGEX).unwrap(),
+            Regex::new(MOBILE_REGEX).unwrap(),
         ]
     }
 }
