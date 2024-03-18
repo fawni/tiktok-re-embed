@@ -8,7 +8,7 @@ use serenity::{
     prelude::*,
 };
 
-use tiktok_re_embed::tiktok::TikTok;
+use tiktok_re_embed::tiktok::Tiktok;
 
 #[tokio::main]
 async fn main() -> miette::Result<()> {
@@ -44,7 +44,7 @@ impl EventHandler for Handler {
 }
 
 async fn handle_message(ctx: Context, mut message: Message) -> miette::Result<()> {
-    let re = TikTok::valid_urls();
+    let re = Tiktok::valid_urls();
     if !re[0].is_match(&message.content) && !re[1].is_match(&message.content) {
         return Ok(());
     };
@@ -65,18 +65,19 @@ async fn handle_message(ctx: Context, mut message: Message) -> miette::Result<()
     }
     let aweme_id = &re[0].captures(&content).unwrap()[1];
     info!(
-        "Re-embedding TikTok with aweme id {} | {}({})",
+        "Re-embedding Tiktok with aweme id {} | {}({})",
         aweme_id,
         message.author.tag(),
         message.author.id
     );
 
-    let Ok(tiktok) = TikTok::from(aweme_id).await else {
+    let Ok(tiktok) = Tiktok::from(aweme_id).await else {
         message
             .react(ctx.http(), ReactionType::Unicode(String::from("❌")))
-            .await.into_diagnostic()?;
+            .await
+            .into_diagnostic()?;
 
-        return Err(miette!("Invalid TikTok ID"));
+        return Err(miette!("Invalid Tiktok ID"));
     };
 
     let file = client

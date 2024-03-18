@@ -3,16 +3,19 @@ use regex::Regex;
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct TikTok {
+pub struct Tiktok {
     pub description: String,
     pub video_url: String,
     pub author: VideoAuthor,
     pub statistics: VideoStatistics,
 }
 
-impl TikTok {
-    pub async fn from(id: &str) -> miette::Result<TikTok> {
-        let api_url = format!("https://api2.musical.ly/aweme/v1/feed/?aweme_id={}", id);
+impl Tiktok {
+    pub async fn from(id: &str) -> miette::Result<Tiktok> {
+        let api_url = format!(
+            "https://api22-normal-c-useast2a.tiktokv.com/aweme/v1/feed/?aweme_id={}",
+            id
+        );
         let res = reqwest::get(api_url)
             .await
             .into_diagnostic()?
@@ -22,10 +25,10 @@ impl TikTok {
         let aweme = res.aweme_list[0].clone();
 
         if aweme.id != id {
-            return Err(miette!("TikTok not found!"));
+            return Err(miette!("Tiktok not found!"));
         }
 
-        Ok(TikTok {
+        Ok(Tiktok {
             video_url: aweme.video.play_addr.url_list[0].to_owned(),
             description: aweme.desc,
             author: aweme.author,
